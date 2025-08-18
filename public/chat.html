@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Chat</title>
+  <link rel="stylesheet" href="/style.css"/>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    #sensor-data {
+      background: #f4f4f4;
+      padding: 10px;
+      margin: 15px 0;
+      border-radius: 8px;
+      position: sticky; /* queda fijo arriba */
+      top: 0;
+      z-index: 10;
+    }
+    #sensor-data h3 {
+      margin-top: 0;
+      color: #333;
+    }
+    .sensor-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 2px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="side" id="side">
+      <h3>Conversaciones</h3>
+      <div id="convList"></div>
+    </aside>
+    <main class="main">
+      <header class="bar">
+        <div id="title">Chat</div>
+        <button onclick="logout()">Salir</button>
+      </header>
+
+      <!-- 🔹 Apartado fijo para datos biométricos -->
+      <section id="sensor-data">
+        <h3>Esperando datos...</h3>
+      </section>
+
+      <section id="thread" class="thread"></section>
+      <footer class="bar" style="position: sticky; bottom: 0;">
+        <input id="msg" placeholder="Escribe un mensaje..."/>
+        <button onclick="sendMsg()">Enviar</button>
+      </footer>
+    </main>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

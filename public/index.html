@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Login - Aula Chat</title>
+  <link rel="stylesheet" href="/style.css"/>
+</head>
+<body class="center">
+  <div class="card">
+    <h2>Ingresar</h2>
+    <p>Demo: alumnos = al1/al2, profe = pr1, pass = 1234</p>
+    <input id="username" placeholder="ID (al1 / pr1)" />
+    <input id="password" placeholder="Password" type="password" />
+    <button id="loginBtn">Entrar</button>
+    <p id="error" class="error"></p>
+  </div>
+  <script>
+    document.getElementById('loginBtn').onclick = async () => {
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value.trim();
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ username, password })
+      });
+      if (!res.ok) {
+        document.getElementById('error').textContent = 'Credenciales inválidas';
+        return;
+      }
+      const user = await res.json();
+      // guardar sesión simple
+      localStorage.setItem('user', JSON.stringify(user));
+      // si es profe, mostramos lista de alumnos a elegir
+      if (user.role === 'profesor') {
+        location.href = '/chat.html?role=profesor';
+      } else {
+        location.href = '/chat.html?role=alumno';
+      }
+    };
+  </script>
+</body>
+</html>

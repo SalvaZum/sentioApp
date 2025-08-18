@@ -1,0 +1,19 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, sans-serif; background: #f6f7fb; color: #222; }
+.center { min-height: 100dvh; display: grid; place-items: center; }
+.card { background: #fff; padding: 1.2rem; border-radius: 16px; width: 320px; box-shadow: 0 10px 30px rgba(0,0,0,.08); }
+.card input { width: 100%; padding: .6rem .8rem; margin: .3rem 0; border: 1px solid #ddd; border-radius: 10px; }
+button { padding: .6rem 1rem; border: 0; border-radius: 10px; cursor: pointer; background: #0b5cff; color: white; }
+.error { color: #c00; }
+.layout { display: grid; grid-template-columns: 260px 1fr; height: 100dvh; }
+.side { background: #111827; color: #e5e7eb; padding: 1rem; overflow: auto; }
+.side h3 { margin-top: 0; }
+.side .item { background:#1f2937; border-radius: 12px; padding:.6rem .8rem; margin-bottom:.6rem; cursor:pointer; }
+.side .item.active { outline: 2px solid #3b82f6; }
+.main { display: grid; grid-template-rows: auto 1fr auto; }
+.bar { background: #fff; padding: .6rem; display: flex; gap: .6rem; align-items: center; border-bottom: 1px solid #eee; }
+.thread { padding: 1rem; overflow: auto; display: flex; flex-direction: column; gap: .6rem; }
+.msg { background: #fff; padding: .6rem .8rem; border-radius: 12px; max-width: 70%; box-shadow: 0 4px 18px rgba(0,0,0,.06); }
+.msg.me { align-self: flex-end; background: #dbeafe; }
+.msg .meta { font-size: .75rem; opacity: .7; }
+.msg.esp { border-left: 4px solid #22c55e; }
