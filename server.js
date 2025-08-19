@@ -22,10 +22,7 @@ const users = [
   { id: 'pr1', name: 'Prof. Perez', role: 'profesor', password: '1234' },
 ];
 
-const alumnoToProfe = {
-  al1: 'pr1',
-  al2: 'pr1',
-};
+const alumnoToProfe = { al1: 'pr1', al2: 'pr1' };
 
 function roomOf(alumnoId, profeId) {
   return `room:${alumnoId}:${profeId}`;
@@ -53,71 +50,97 @@ app.get('/api/alumnos', (req, res) => {
   res.json(lista || []);
 });
 
-// --- CHAT ---
+// --- CHAT SOCKET.IO ---
 io.on('connection', socket => {
   socket.on('join', ({ role, alumnoId, profeId, selfId }) => {
     try {
+      // Salir de la sala anterior si existía (evita escuchar chats viejos)
+      if (socket.data?.alumnoId && socket.data?.profeId) {
+        socket.leave(roomOf(socket.data.alumnoId, socket.data.profeId));
+      }
+
       if (role === 'alumno') {
         const asignado = alumnoToProfe[alumnoId];
-        if (!asignado || asignado !== profeId) return;
+        if (!asignado || (profeId && asignado !== profeId)) return;
+        profeId = asignado; // asegurar profe correcto
         socket.join(roomOf(alumnoId, profeId));
       } else if (role === 'profesor') {
         socket.join(roomOf(alumnoId, profeId));
       }
+
       socket.data = { role, alumnoId, profeId, selfId };
-      io.to(roomOf(alumnoId, profeId)).emit('system', `${selfId} se unió al chat`);
+      // (si no querés el mensaje de sistema, dejalo comentado)
+      // io.to(roomOf(alumnoId, profeId)).emit('system', `${selfId} se unió al chat`);
     } catch (e) {
       console.error(e);
     }
   });
 
-  socket.on('message', ({ text }) => {
-    const { alumnoId, profeId, selfId } = socket.data || {};
-    if (!alumnoId || !profeId) return;
-    const payload = { from: selfId, text, ts: Date.now(), kind: 'chat' };
-    io.to(roomOf(alumnoId, profeId)).emit('message', payload);
+  // 🔴 ARREGLO PRINCIPAL: siempre incluir alumnoId en el payload
+  socket.on('message', ({ text, alumnoId: alumnoIdParam }) => {
+    try {
+      const role = socket.data?.role;
+      let alumnoId = socket.data?.alumnoId;
+      let profeId  = socket.data?.profeId;
+
+      // Si el que envía es el profe, usamos el alumno seleccionado en el cliente
+      if (role === 'profesor') {
+        alumnoId = alumnoIdParam || alumnoId;
+      } else if (role === 'alumno') {
+        // asegurar el profe correcto para ese alumno
+        profeId = alumnoToProfe[alumnoId];
+      }
+
+      if (!alumnoId || !profeId) return;
+
+      const payload = {
+        from: socket.data?.selfId,
+        text,
+        ts: Date.now(),
+        kind: 'chat',
+        alumnoId,   // 👈 NECESARIO para que el profe no lo filtre
+        profeId
+      };
+
+      io.to(roomOf(alumnoId, profeId)).emit('message', payload);
+    } catch (e) {
+      console.error('error enviando mensaje', e);
+    }
   });
 });
 
-// --- MQTT ---
+// --- MQTT (opcional, lo mantengo como lo tenías) ---
 const mqttClient = mqtt.connect("mqtt://192.168.50.1:1883");
-
 mqttClient.on("connect", () => {
   console.log("Conectado al broker MQTT");
-  mqttClient.subscribe("esp32/+/datos"); // 👈 ahora acepta cualquier alumno
+  mqttClient.subscribe("esp32/+/datos");
 });
 
-// --- Función para predecir estado de ánimo ---
+// ejemplo de "predicción" simple; puedes mantenerlo o quitarlo
 function predecirEstado(data) {
   const { hr, temp, steps } = data;
-
   if (!hr || !temp) return "Indefinido";
-
   if (hr > 100 && steps < 50) return "Ansioso";
   if (hr < 60 && steps < 30) return "Relajado";
   if (steps > 500) return "Activo";
   if (temp > 37.5) return "Cansado/Febril";
-
   return "Normal";
 }
 
 mqttClient.on("message", (topic, msgBuf) => {
   try {
-    // topic: esp32/<alumnoId>/datos
     const [, alumnoId] = topic.split('/');
     const profeId = alumnoToProfe[alumnoId];
     if (!profeId) return;
 
     const data = JSON.parse(msgBuf.toString());
-
-    // 👇 añadimos el estado de ánimo
     const mood = predecirEstado(data);
 
     const payload = {
       kind: 'esp',
       alumnoId,
       data,
-      mood, // 👈 nuevo campo
+      mood,
       ts: Date.now(),
     };
 
@@ -130,4 +153,3 @@ mqttClient.on("message", (topic, msgBuf) => {
 server.listen(PORT, () => {
   console.log(`Servidor escuchando en http://0.0.0.0:${PORT}`);
 });
-
