@@ -12,6 +12,12 @@ const title = document.getElementById('title');
 let currentAlumnoId = null; 
 let profeId = null;
 
+//Crea apartado para datos ESP 32
+const divEsp = document.getElementById('sensor-data')
+if(role==='alumno'){
+  divEsp.remove()
+}
+
 // Historial por alumno (solo profe)
 const chatHistory = {}; // { alumnoId: [ msg, ... ] }
 
