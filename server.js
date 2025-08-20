@@ -54,40 +54,36 @@ app.get('/api/alumnos', (req, res) => {
 io.on('connection', socket => {
   socket.on('join', ({ role, alumnoId, profeId, selfId }) => {
     try {
-      // Salir de la sala anterior si existía (evita escuchar chats viejos)
-      if (socket.data?.alumnoId && socket.data?.profeId) {
+      if (socket.data?.role === 'alumno') {
         socket.leave(roomOf(socket.data.alumnoId, socket.data.profeId));
+      } else if (socket.data?.role === 'profesor') {
+        socket.leave(`room:profesor:${socket.data.profeId}`);
       }
 
       if (role === 'alumno') {
         const asignado = alumnoToProfe[alumnoId];
         if (!asignado || (profeId && asignado !== profeId)) return;
-        profeId = asignado; // asegurar profe correcto
-        socket.join(roomOf(alumnoId, profeId));
+        profeId = asignado;
+        socket.join(roomOf(alumnoId, profeId)); // alumno entra a su sala
       } else if (role === 'profesor') {
-        socket.join(roomOf(alumnoId, profeId));
+        socket.join(`room:profesor:${profeId}`); // profesor entra a sala global
       }
 
       socket.data = { role, alumnoId, profeId, selfId };
-      // (si no querés el mensaje de sistema, dejalo comentado)
-      // io.to(roomOf(alumnoId, profeId)).emit('system', `${selfId} se unió al chat`);
     } catch (e) {
       console.error(e);
     }
   });
 
-  // 🔴 ARREGLO PRINCIPAL: siempre incluir alumnoId en el payload
   socket.on('message', ({ text, alumnoId: alumnoIdParam }) => {
     try {
       const role = socket.data?.role;
       let alumnoId = socket.data?.alumnoId;
       let profeId  = socket.data?.profeId;
 
-      // Si el que envía es el profe, usamos el alumno seleccionado en el cliente
       if (role === 'profesor') {
         alumnoId = alumnoIdParam || alumnoId;
       } else if (role === 'alumno') {
-        // asegurar el profe correcto para ese alumno
         profeId = alumnoToProfe[alumnoId];
       }
 
@@ -98,16 +94,21 @@ io.on('connection', socket => {
         text,
         ts: Date.now(),
         kind: 'chat',
-        alumnoId,   // 👈 NECESARIO para que el profe no lo filtre
+        alumnoId,
         profeId
       };
 
+      // 🔹 enviar al chat privado
       io.to(roomOf(alumnoId, profeId)).emit('message', payload);
+
+      // 🔹 enviar SIEMPRE al profesor (sala global)
+      io.to(`room:profesor:${profeId}`).emit('message', payload);
     } catch (e) {
       console.error('error enviando mensaje', e);
     }
   });
 });
+
 
 // --- MQTT (opcional, lo mantengo como lo tenías) ---
 const mqttClient = mqtt.connect("mqtt://192.168.50.1:1883");
@@ -116,6 +117,7 @@ mqttClient.on("connect", () => {
   mqttClient.subscribe("esp32/+/datos");
 });
 
+// uso de datos Esp32
 // ejemplo de "predicción" simple; puedes mantenerlo o quitarlo
 function predecirEstado(data) {
   const { hr, temp, steps } = data;
