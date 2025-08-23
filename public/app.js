@@ -14,8 +14,12 @@ let profeId = null;
 
 //Crea apartado para datos ESP 32
 const divEsp = document.getElementById('sensor-data')
+const chat = document.querySelector('.chat')
 if(role==='alumno'){
   divEsp.remove()
+  chat.style.width='100%'
+}else{
+  chat.style.width='70%'
 }
 
 // Historial por alumno (solo profe)
@@ -43,20 +47,18 @@ function logout() {
   if (role === 'alumno') {
     const alumnoId = user.id;
     currentAlumnoId = alumnoId;
-    title.textContent = `Chat con tu profesor`;
     // el profe real se valida en servidor con alumnoToProfe
     socket.emit('join', { role: 'alumno', alumnoId, profeId: 'pr1', selfId: user.id });
     convList.innerHTML = `<div class="item active">Tu profesor</div>`;
   } else { // profesor
     profeId = user.id;
-    title.textContent = `Profesor: ${user.name}`;
     const res = await fetch('/api/alumnos?profeId=' + profeId);
     const alumnos = await res.json();
     convList.innerHTML = '';
     alumnos.forEach(al => {
       const item = document.createElement('div');
       item.className = 'item';
-      item.textContent = `${al.name} (${al.id})`;
+      item.textContent = `${al.name}`;
       item.onclick = () => selectAlumno(al.id, item);
       convList.appendChild(item);
     });
@@ -78,7 +80,7 @@ function selectAlumno(alumnoId, itemEl) {
 
   // Unirse a sala específica (actualiza socket.data en el servidor)
   socket.emit('join', { role: 'profesor', alumnoId, profeId, selfId: user.id });
-  title.textContent = `Chat con ${alumnoId}`;
+ 
 }
 
 // SYSTEM (si lo envías; en tu server está comentado)

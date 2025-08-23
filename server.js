@@ -152,6 +152,6 @@ mqttClient.on("message", (topic, msgBuf) => {
   }
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor escuchando en http://0.0.0.0:${PORT}`);
 });

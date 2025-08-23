@@ -4,16 +4,87 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Login - Aula Chat</title>
-  <link rel="stylesheet" href="/style.css"/>
-</head>
+  <style>
+/* RESET Y FUENTE */
+* { box-sizing: border-box; margin:0; padding:0; }
+body { font-family: 'Roboto', sans-serif; background: #f4f6f8; color:#333; }
+
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+.login-box {
+  background: #ffffff;
+  padding: 40px 30px;
+  border-radius: 12px;
+  box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+}
+
+.login-box h2 {
+  margin-bottom: 30px;
+  color: #1a73e8;
+  font-weight: 700;
+}
+
+.login-box input[type="text"],
+.login-box input[type="password"] {
+  width: 100%;
+  padding: 12px 15px;
+  margin: 10px 0 20px 0;
+  border-radius: 25px;
+  border: 1px solid #ccc;
+  outline: none;
+  font-size: 14px;
+  transition: 0.3s;
+}
+
+.login-box input:focus {
+  border-color: #1a73e8;
+  box-shadow: 0 0 5px rgba(26,115,232,0.4);
+}
+
+.login-box button {
+  width: 100%;
+  padding: 12px 20px;
+  border-radius: 25px;
+  border: none;
+  background: #1a73e8;
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.login-box button:hover {
+  background: #155ab6;
+}
+
+.login-box p{
+  margin: 10px;
+}
+
+@media(max-width: 500px){
+  .login-box {
+    padding: 30px 20px;
+  }
+}
+  </style>
+</head> 
 <body class="center">
-  <div class="card">
-    <h2>Ingresar</h2>
-    <p>Demo: alumnos = al1/al2, profe = pr1, pass = 1234</p>
-    <input id="username" placeholder="ID (al1 / pr1)" />
-    <input id="password" placeholder="Password" type="password" />
-    <button id="loginBtn">Entrar</button>
-    <p id="error" class="error"></p>
+  <div class="login-container">
+    <div class="login-box">
+      <h2>Iniciar Sesión</h2>
+      <input id="username" type="text" placeholder="ID (al1 / pr1)" />
+      <input id="password" placeholder="Password" type="password" />
+      <button id="loginBtn">Entrar</button>
+      <p id="error" class="error"></p>
+    </div>
   </div>
   <script>
     document.getElementById('loginBtn').onclick = async () => {
@@ -26,6 +97,7 @@
       });
       if (!res.ok) {
         document.getElementById('error').textContent = 'Credenciales inválidas';
+        document.getElementById('error').style.color='red'
         return;
       }
       const user = await res.json();

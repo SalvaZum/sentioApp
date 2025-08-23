@@ -7,51 +7,48 @@
   <link rel="stylesheet" href="/style.css"/>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    #sensor-data {
-      background: #f4f4f4;
-      padding: 10px;
-      margin: 15px 0;
-      border-radius: 8px;
-      position: sticky; /* queda fijo arriba */
-      top: 0;
-      z-index: 10;
-    }
-    #sensor-data h3 {
-      margin-top: 0;
-      color: #333;
-    }
-    .sensor-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 2px 0;
-    }
+  
   </style>
 </head>
 <body>
   <div class="layout">
     <aside class="side" id="side">
-      <h3>Conversaciones</h3>
+      <div class="upper-side">
+        <h3>Chats</h3>
+        <button onclick="logout()" class="salir">Salir</button>
+      </div>
       <div id="convList"></div>
     </aside>
     <main class="main">
-      <header class="bar">
-        <div id="title">Chat</div>
-        <button onclick="logout()">Salir</button>
-      </header>
-
+      <div class="chat">
+        <section id="thread" class="thread"></section>
+        <footer class="bar">
+          <input  id="msg" placeholder="Escribe un mensaje..."/>
+          <button onclick="sendMsg()">Enviar</button>
+        </footer>
+      </div>
       <!-- 🔹 Apartado fijo para datos biométricos -->
       <section id="sensor-data">
         <h3>Esperando datos...</h3>
+        <div class="decorative-line"></div>
       </section>
+      <script>
+        function syncFooterWidth() {
+          const contenedor = document.querySelector('.chat');
+          const bar = document.querySelector('.bar');
+          const contenedorRect = contenedor.getBoundingClientRect();
+    
+          bar.style.width = `${contenedorRect.width}px`;
+          bar.style.left = `${contenedorRect.left}px`;
+        }
 
-      <section id="thread" class="thread"></section>
-      <footer class="bar" style="position: sticky; bottom: 0;">
-        <input id="msg" placeholder="Escribe un mensaje..."/>
-        <button onclick="sendMsg()">Enviar</button>
-      </footer>
+        window.addEventListener('resize', syncFooterWidth);
+        window.addEventListener('DOMContentLoaded', syncFooterWidth);
+      </script>
     </main>
   </div>
 
   <script src="/app.js"></script>
+  
 </body>
 </html>
