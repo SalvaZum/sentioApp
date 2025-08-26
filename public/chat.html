@@ -33,17 +33,21 @@
         <div class="decorative-line"></div>
       </section>
       <script>
+        if(window.width<'785'){
         function syncFooterWidth() {
           const contenedor = document.querySelector('.chat');
           const bar = document.querySelector('.bar');
           const contenedorRect = contenedor.getBoundingClientRect();
     
+
           bar.style.width = `${contenedorRect.width}px`;
           bar.style.left = `${contenedorRect.left}px`;
+  
         }
 
         window.addEventListener('resize', syncFooterWidth);
         window.addEventListener('DOMContentLoaded', syncFooterWidth);
+      }
       </script>
     </main>
   </div>
@@ -52,3 +56,4 @@
   
 </body>
 </html>
+
