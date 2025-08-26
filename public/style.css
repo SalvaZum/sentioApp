@@ -61,7 +61,7 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #f6f7fb; color
     bottom: 0; 
     }
     .thread{
-        width: 30%;
+        width: 100%;
     }
     #sensor-data{
         width: 30%;
