@@ -78,6 +78,25 @@ app.get('/api/alumnos', async (req, res) => {
   res.json(data || []);
 });
 
+app.get('/api/messages/:alumnoId/:profeId', async (req, res) => {
+  const { alumnoId, profeId } = req.params;
+
+  const { data, error } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('alumno_id', alumnoId)
+    .eq('profe_id', profeId)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error("❌ Error trayendo mensajes:", error.message);
+    return res.status(500).json({ error: "Error trayendo mensajes" });
+  }
+
+  res.json(data);
+});
+
+
 
 // --- SOCKET.IO CHAT ---
 io.on('connection', socket => {
@@ -110,7 +129,7 @@ io.on('connection', socket => {
     }
   });
 
-  socket.on('message', ({ text, alumnoId: alumnoIdParam }) => {
+  socket.on('message', async ({ text, alumnoId: alumnoIdParam }) => {
   try {
     const role = socket.data?.role;
     let alumnoId = socket.data?.alumnoId;
@@ -130,13 +149,24 @@ io.on('connection', socket => {
       profeId
     };
 
-    // 🔹 Sala privada (siempre)
+    // 🔹 Guardar en Supabase
+    const { error } = await supabase
+    .from('messages')
+    .insert([
+      {
+        user_id: socket.data?.selfId,
+        alumno_id: alumnoId,
+        profe_id: profeId,
+        content: text
+      }
+    ]);
+
+    if (error) console.error("❌ Error guardando mensaje:", error);
+
+    // 🔹 Emitir por Socket.IO como ya hacías
     io.to(roomOf(alumnoId, profeId)).emit('message', payload);
 
-    // 🔹 Sala global del profe solo si el mensaje viene de un alumno
-    //    y el profe no está recibiendo duplicado
     if (role === 'alumno') {
-      // emitimos a todos los sockets del profe excepto los que ya están en la sala privada
       const profSockets = Array.from(io.sockets.adapter.rooms.get(`room:profesor:${profeId}`) || []);
       const privateRoomSockets = new Set(io.sockets.adapter.rooms.get(roomOf(alumnoId, profeId)) || []);
 
@@ -146,19 +176,17 @@ io.on('connection', socket => {
         }
       });
     }
-
   } catch (e) {
     console.error('error enviando mensaje', e);
   }
 });
 
 
+
   socket.on('disconnect', () => {
     console.log('🔴 Socket desconectado', socket.id);
   });
 });
-
-
 
 // --- MQTT opcional (igual que lo tenías) ---
 const mqttClient = mqtt.connect('mqtt://192.168.50.1:1883');
