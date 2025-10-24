@@ -3,11 +3,43 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Chat</title>
+  <title>Sentio Desk Chat</title>
   <link rel="stylesheet" href="/style.css"/>
   <script src="/socket.io/socket.io.js"></script>
+  <script src="https://kit.fontawesome.com/a2d9e9d6b8.js" crossorigin="anonymous"></script>
   <style>
-  
+    .item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 5px 10px;
+      cursor: pointer;
+      border-radius: 5px;
+      margin-bottom: 2px;
+    }
+
+    .item.active {
+      background-color: #e0f7fa;
+    }
+
+    .traffic-light {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-left: 10px;
+      background-color: gray; /* valor inicial */
+      display: inline-block;
+    }
+    .msg {
+  display: flex;
+  flex-direction: column;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 6px;
+  max-width: 80%;
+  word-break: break-word;
+}
+
   </style>
 </head>
 <body>
@@ -17,179 +49,54 @@
         <h3>Chats</h3>
         <button onclick="logout()" class="salir">Salir</button>
       </div>
-      <div id="convList"></div>
+      <div id="convList">
+      </div>
     </aside>
+
     <main class="main">
       <div class="chat">
         <section id="thread" class="thread"></section>
         <footer class="bar">
-          <input  id="msg" placeholder="Escribe un mensaje..."/>
+          <input id="msg" placeholder="Escribe un mensaje..."/>
           <button onclick="sendMsg()">Enviar</button>
         </footer>
       </div>
-      <!-- 🔹 Apartado fijo para datos biométricos -->
+
+      <!-- PANEL DE MONITOREO -->
       <section id="sensor-data">
         <div class="container">
-        <header>
-            <h1><i class="fas fa-brain"></i> Sentio Desk Monitor</h1>
-        </header>
+          <div class="dashboard">
+            <div class="card">
+              <h3><i class="fas fa-info-circle"></i> Estado Emocional</h3>
+              <div class="value" id="moodValue">--</div>
+            </div>
 
-        <div class="status-bar">
-            <div class="connection-status disconnected" id="connectionStatus">Desconectado</div>
-            <div id="lastUpdate">Última actualización: --:--:--</div>
-            <button onclick="connectSerial()" class="connection-status" style="border-radius:20px; margin:10px;">
-                <i class="fas fa-plug"></i> Conectar Serial
-            </button>
+            <div class="card">
+              <h3><i class="fas fa-heart"></i> Ritmo Cardíaco</h3>
+              <div class="value" id="heartRate">0 <span style="font-size:0.6em;color:#666;">BPM</span></div>
+            </div>
+
+            <div class="card">
+              <h3><i class="fas fa-thermometer-half"></i> Temperatura</h3>
+              <div class="value" id="temperature">0.0 <span style="font-size:0.6em;color:#666;">°C</span></div>
+            </div>
+
+            <div class="card">
+              <h3><i class="fas fa-wave-square"></i> Sensor IR</h3>
+              <div class="value" id="irValue">0</div>
+            </div>
+
+            <div class="card">
+              <h3><i class="fas fa-running"></i> Movimiento</h3>
+              <div class="value" id="accX">0.00</div>
+            </div>
+
+          </div>
         </div>
-
-        <div class="dashboard">
-            <div class="card" style="margin:10px;">
-                <h3><i class="fas fa-heart"></i> Ritmo Cardíaco</h3>
-                <div class="value" id="heartRate">0 <span style="font-size: 0.6em; color: #666;">BPM</span></div>
-            </div>
-            
-            <div class="card" style="margin:10px;">
-                <h3><i class="fas fa-thermometer-half"></i> Temperatura</h3>
-                <div class="value" id="temperature">0.0 <span style="font-size: 0.6em; color: #666;">°C</span></div>
-            </div>
-
-            <div class="card" style="margin:10px;">
-                <h3><i class="fas fa-wave-square"></i> Sensor IR</h3>
-                <div class="value" id="irValue">0</div>
-            </div>
-        </div>
-<!-- 
-        <div id="noFingerAlert" class="alert alert-warning" style="display: none;">
-            <i class="fas fa-exclamation-triangle"></i> No se detecta dedo en el sensor
-        </div>
-
-        <div class="charts-grid">
-            <div class="chart-container">
-                <h3><i class="fas fa-chart-line"></i> Ritmo Cardíaco en Tiempo Real</h3>
-                <canvas id="heartRateChart" height="250"></canvas>
-            </div>
-            
-            <div class="chart-container">
-                <h3><i class="fas fa-brain"></i> Estados Mentales</h3>
-                <canvas id="mentalStatesChart" height="250"></canvas>
-            </div>
-        </div> -->
-
-        <div class="dashboard">
-            <div class="card" style="margin:10px;">
-                <h3><i class="fas fa-focus"></i> Concentración</h3>
-                <div class="value" id="concentrationValue">0%</div>
-                <div class="progress-container">
-                    <div class="progress-bar">
-                        <div class="progress-fill progress-concentration" id="concentrationBar" style="width: 0%"></div>
-                    </div>
-                    <div class="progress-labels">
-                        <span>Baja</span>
-                        <span>Media</span>
-                        <span>Alta</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card" style="margin:10px;">
-                <h3><i class="fas fa-focus"></i> Desconcentración</h3>
-                <div class="value" id="distractionValue">0%</div>
-                <div class="progress-container">
-                    <div class="progress-bar">
-                        <div class="progress-fill progress-stress" id="distractionBar" style="width: 0%"></div>
-                    </div>
-                    <div class="progress-labels">
-                        <span>Baja</span>
-                        <span>Media</span>
-                        <span>Alta</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card" style="margin:10px;">
-                <h3><i class="fas fa-stress"></i> Estrés</h3>
-                <div class="value" id="stressValue">0%</div>
-                <div class="progress-container">
-                    <div class="progress-bar">
-                        <div class="progress-fill progress-stress" id="stressBar" style="width: 0%"></div>
-                    </div>
-                    <div class="progress-labels">
-                        <span>Bajo</span>
-                        <span>Medio</span>
-                        <span>Alto</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card" style="margin:10px;">
-                <h3><i class="fas fa-anxiety"></i> Ansiedad</h3>
-                <div class="value" id="anxietyValue">0%</div>
-                <div class="progress-container">
-                    <div class="progress-bar">
-                        <div class="progress-fill progress-anxiety" id="anxietyBar" style="width: 0%"></div>
-                    </div>
-                    <div class="progress-labels">
-                        <span>Baja</span>
-                        <span>Media</span>
-                        <span>Alta</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="chart-container">
-            <h3><i class="fas fa-microchip"></i> Datos de Sensores</h3>
-            <div class="sensor-grid">
-                <div class="sensor-data">
-                    <h4>Acelerómetro X</h4>
-                    <div class="sensor-value" id="accX">0.00</div>
-                </div>
-                <div class="sensor-data">
-                    <h4>Acelerómetro Y</h4>
-                    <div class="sensor-value" id="accY">0.00</div>
-                </div>
-                <div class="sensor-data">
-                    <h4>Acelerómetro Z</h4>
-                    <div class="sensor-value" id="accZ">0.00</div>
-                </div>
-                <div class="sensor-data">
-                    <h4>Giroscopio X</h4>
-                    <div class="sensor-value" id="gyroX">0</div>
-                </div>
-                <div class="sensor-data">
-                    <h4>Giroscopio Y</h4>
-                    <div class="sensor-value" id="gyroY">0.00</div>
-                </div>
-                <div class="sensor-data">
-                    <h4>Giroscopio Z</h4>
-                    <div class="sensor-value" id="gyroZ">0.00</div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
       </section>
-      <script>
-        if(window.width<'785'){
-        function syncFooterWidth() {
-          const contenedor = document.querySelector('.chat');
-          const bar = document.querySelector('.bar');
-          const contenedorRect = contenedor.getBoundingClientRect();
-    
-
-          bar.style.width = `${contenedorRect.width}px`;
-          bar.style.left = `${contenedorRect.left}px`;
-  
-        }
-
-        window.addEventListener('resize', syncFooterWidth);
-        window.addEventListener('DOMContentLoaded', syncFooterWidth);
-      }
-      </script>
     </main>
   </div>
 
   <script src="/app.js"></script>
-  
 </body>
 </html>
