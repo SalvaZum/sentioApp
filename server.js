@@ -5,14 +5,39 @@ const http = require('http');
 const { Server } = require('socket.io');
 const mqtt = require('mqtt');
 const cors = require('cors');
-const { createClient } = require('@supabase/supabase-js');
 const bodyParser = require('body-parser');
+const mongoose = require('mongoose');
 
-// --- SUPABASE CONFIG ---
-const supabaseUrl = 'https://kfkzhppfrygsafgapxiw.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtma3pocHBmcnlnc2FmZ2FweGl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU5ODE4MDYsImV4cCI6MjA3MTU1NzgwNn0.-Wirpd6kHGFIocqM9VmMDOBGNlV6ckmagcJCftV_txM';
-const supabase = createClient(supabaseUrl, supabaseKey);
+// --- CONEXIÓN MONGODB ---
+mongoose.connect(process.env.MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+})
+  .then(() => console.log('✅ Conectado a MongoDB'))
+  .catch(err => console.error('❌ Error conectando a MongoDB:', err));
 
+// --- MODELOS ---
+const UsuarioSchema = new mongoose.Schema({
+  username: String,
+  email: String,
+  password: String,
+  name: String,
+  role: String,
+  profeId: String
+});
+
+const MessageSchema = new mongoose.Schema({
+  user_id: String,
+  alumno_id: String,
+  profe_id: String,
+  content: String,
+  created_at: { type: Date, default: Date.now }
+});
+
+const Usuario = mongoose.model('Usuario', UsuarioSchema);
+const Message = mongoose.model('Message', MessageSchema);
+
+// --- CONFIG SERVIDOR ---
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
@@ -34,22 +59,16 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.post('/api/login', async (req, res) => {
   try {
     const { username, email, password } = req.body;
-    const { data, error } = await supabase
-      .from('usuarios')
-      .select('*')
-      .eq('email', email)
-      .eq('username', username)
-      .eq('password', password)
-      .single();
+    const user = await Usuario.findOne({ email, username, password }).lean();
 
-    if (error || !data) return res.status(401).json({ error: 'Credenciales inválidas' });
+    if (!user) return res.status(401).json({ error: 'Credenciales inválidas' });
 
     res.json({
-      id: data.id,
-      username: data.username,
-      name: data.name || data.username,
-      role: data.role,
-      profeId: data.profeId || null
+      id: user._id,
+      username: user.username,
+      name: user.name || user.username,
+      role: user.role,
+      profeId: user.profeId || null
     });
   } catch (err) {
     console.error('Error en /api/login:', err);
@@ -59,30 +78,25 @@ app.post('/api/login', async (req, res) => {
 
 // --- LISTA DE ALUMNOS ---
 app.get('/api/alumnos', async (req, res) => {
-  const { data, error } = await supabase
-    .from('usuarios')
-    .select('id, username, name, role')
-    .eq('role', 'alumno');
-
-  if (error) return res.status(500).json({ error: 'Error consultando alumnos' });
-
-  res.json(data || []);
+  try {
+    const alumnos = await Usuario.find({ role: 'alumno' }, 'id username name role').lean();
+    res.json(alumnos);
+  } catch (err) {
+    res.status(500).json({ error: 'Error consultando alumnos' });
+  }
 });
 
 // --- HISTORIAL DE MENSAJES ---
 app.get('/api/messages/:alumnoId/:profeId', async (req, res) => {
-  const { alumnoId, profeId } = req.params;
-
-  const { data, error } = await supabase
-    .from('messages')
-    .select('*')
-    .eq('alumno_id', alumnoId)
-    .eq('profe_id', profeId)
-    .order('created_at', { ascending: true });
-
-  if (error) return res.status(500).json({ error: 'Error trayendo mensajes' });
-
-  res.json(data);
+  try {
+    const { alumnoId, profeId } = req.params;
+    const mensajes = await Message.find({ alumno_id: alumnoId, profe_id: profeId })
+      .sort({ created_at: 1 })
+      .lean();
+    res.json(mensajes);
+  } catch (err) {
+    res.status(500).json({ error: 'Error trayendo mensajes' });
+  }
 });
 
 // --- MQTT ---
@@ -95,7 +109,7 @@ client.on("connect", () => {
 });
 
 function calcularEstadoEmocional(data) {
-  const { bpm, rmssd, movimiento, estadoAlumno } = data;
+  const { bpm, rmssd, movimiento } = data;
   if (bpm === 0) return "Sin Dedo";
   if (rmssd > 35 && bpm >= 60 && bpm <= 90 && movimiento < 25) return "Calma 😌";
   if (rmssd < 25 && bpm > 95 && movimiento < 40) return "Estrés 😰";
@@ -129,12 +143,11 @@ client.on("message", (topic, message) => {
   }
 });
 
-// --- SOCKET.IO UNIFICADO ---
+// --- SOCKET.IO ---
 io.on('connection', socket => {
   console.log('🟢 Nuevo socket conectado', socket.id);
 
   socket.on('join', ({ role, alumnoId, profeId, selfId }) => {
-    // salir de salas previas
     if (socket.data?.role === 'alumno') socket.leave(roomOf(socket.data.alumnoId, socket.data.profeId));
     if (socket.data?.role === 'profesor') {
       socket.leave(`room:profesor:${socket.data.profeId}`);
@@ -154,35 +167,31 @@ io.on('connection', socket => {
     socket.data = { role, alumnoId, profeId, selfId };
   });
 
-socket.on('message', async ({ text, alumnoId: alumnoIdParam, tempId }) => {
-  try {
-    const role = socket.data?.role;
-    let alumnoId = socket.data?.alumnoId;
-    let profeId = socket.data?.profeId;
+  socket.on('message', async ({ text, alumnoId: alumnoIdParam, tempId }) => {
+    try {
+      const role = socket.data?.role;
+      let alumnoId = socket.data?.alumnoId;
+      let profeId = socket.data?.profeId;
 
-    if (role === 'profesor') alumnoId = alumnoIdParam || alumnoId;
-    if (role === 'alumno') profeId = alumnoToProfe[alumnoId];
-    if (!alumnoId || !profeId) return;
+      if (role === 'profesor') alumnoId = alumnoIdParam || alumnoId;
+      if (role === 'alumno') profeId = alumnoToProfe[alumnoId];
+      if (!alumnoId || !profeId) return;
 
-    const payload = { from: socket.data.selfId, text, ts: Date.now(), alumnoId, profeId, tempId };
+      const payload = { from: socket.data.selfId, text, ts: Date.now(), alumnoId, profeId, tempId };
 
-    // Guardar en la DB
-    await supabase.from('messages').insert([{
-      user_id: socket.data.selfId,
-      alumno_id: alumnoId,
-      profe_id: profeId,
-      content: text
-    }]);
+      await Message.create({
+        user_id: socket.data.selfId,
+        alumno_id: alumnoId,
+        profe_id: profeId,
+        content: text
+      });
 
-    // Emitir solo a la sala del alumno con el profesor
-    io.to(roomOf(alumnoId, profeId)).emit('message', payload);
+      io.to(roomOf(alumnoId, profeId)).emit('message', payload);
 
-  } catch (err) {
-    console.error("❌ Error enviando mensaje:", err);
-  }
-});
-
-
+    } catch (err) {
+      console.error("❌ Error enviando mensaje:", err);
+    }
+  });
 
   socket.on('disconnect', () => console.log('🔴 Socket desconectado', socket.id));
 });
