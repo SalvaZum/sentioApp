@@ -6,194 +6,198 @@ const { Server } = require('socket.io');
 const mqtt = require('mqtt');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const mongoose = require('mongoose');
+const admin = require('firebase-admin');
 
-// --- CONEXIÓN MONGODB ---
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-})
-  .then(() => console.log('✅ Conectado a MongoDB'))
-  .catch(err => console.error('❌ Error conectando a MongoDB:', err));
+if (!process.env.FIREBASE_KEY) {
+  console.error('❌ Debes poner FIREBASE_KEY="./firebase-key.json" en .env');
+  process.exit(1);
+}
 
-// --- MODELOS ---
-const UsuarioSchema = new mongoose.Schema({
-  username: String,
-  email: String,
-  password: String,
-  name: String,
-  role: String,
-  profeId: String
+const serviceAccount = require(process.env.FIREBASE_KEY);
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
 });
 
-const MessageSchema = new mongoose.Schema({
-  user_id: String,
-  alumno_id: String,
-  profe_id: String,
-  content: String,
-  created_at: { type: Date, default: Date.now }
-});
+const db = admin.firestore();
+const Usuarios = db.collection('usuarios');
+const Messages = db.collection('mensajes');
 
-const Usuario = mongoose.model('Usuario', UsuarioSchema);
-const Message = mongoose.model('Message', MessageSchema);
+console.log('✅ Firebase conectado');
 
-// --- CONFIG SERVIDOR ---
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 const PORT = process.env.PORT || 3000;
 
-// --- Mapeo alumnos a profesores ---
-const alumnoToProfe = { al1: 'pr1', al2: 'pr1', al3: 'pr1', al4: 'pr1' };
-function roomOf(alumnoUsername, profeUsername) {
-  return `room:${alumnoUsername}:${profeUsername}`;
-}
-
-// --- Middlewares ---
 app.use(cors());
 app.use(bodyParser.json());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- LOGIN ---
+function roomOf(a, p) { return `room:${a}:${p}`; }
+
+// ======================
+// LOGIN
+// ======================
 app.post('/api/login', async (req, res) => {
   try {
     const { username, email, password } = req.body;
-    const user = await Usuario.findOne({ email, username, password }).lean();
 
-    if (!user) return res.status(401).json({ error: 'Credenciales inválidas' });
+    const snap = await Usuarios
+      .where('email', '==', email)
+      .where('username', '==', username)
+      .where('password', '==', password)
+      .get();
 
-    res.json({
-      id: user._id,
-      username: user.username,
-      name: user.name || user.username,
-      role: user.role,
-      profeId: user.profeId || null
-    });
+    if (snap.empty) return res.status(401).json({ error: 'Credenciales inválidas' });
+
+    const doc = snap.docs[0];
+    res.json({ id: doc.id, ...doc.data() });
+
   } catch (err) {
-    console.error('Error en /api/login:', err);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    console.error("❌ Error login:", err);
+    res.status(500).json({ error: 'Error interno' });
   }
 });
 
-// --- LISTA DE ALUMNOS ---
+// ======================
+// LISTA ALUMNOS
+// ======================
 app.get('/api/alumnos', async (req, res) => {
   try {
-    const alumnos = await Usuario.find({ role: 'alumno' }, 'id username name role').lean();
+    const profeId = req.query.profeId;
+    if (!profeId) return res.status(400).json({ error: 'Falta profeId' });
+
+    const snap = await Usuarios
+      .where('role', '==', 'alumno')
+      .where('profeId', '==', profeId)
+      .get();
+
+    let alumnos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    console.log('Alumnos recibidos (server):', alumnos);
+
     res.json(alumnos);
+
   } catch (err) {
+    console.error("❌ Error alumnos:", err);
     res.status(500).json({ error: 'Error consultando alumnos' });
   }
 });
 
-// --- HISTORIAL DE MENSAJES ---
+// ======================
+// HISTORIAL
+// ======================
 app.get('/api/messages/:alumnoId/:profeId', async (req, res) => {
   try {
     const { alumnoId, profeId } = req.params;
-    const mensajes = await Message.find({ alumno_id: alumnoId, profe_id: profeId })
-      .sort({ created_at: 1 })
-      .lean();
-    res.json(mensajes);
+    const snap = await Messages
+      .where('alumno_id', '==', alumnoId)
+      .where('profe_id', '==', profeId)
+      .orderBy('ts')
+      .get();
+
+    const history = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    res.json(history);
+
   } catch (err) {
-    res.status(500).json({ error: 'Error trayendo mensajes' });
+    console.error("🔥 Error historial:", err);
+    res.status(500).json({ error: 'Error cargando historial' });
   }
 });
 
-// --- MQTT ---
-const MQTT_BROKER = "mqtt://10.42.0.1";
+// ======================
+// MQTT
+// ======================
+const MQTT_BROKER = process.env.MQTT_BROKER || "mqtt://10.42.0.1";
 const client = mqtt.connect(MQTT_BROKER);
 
-client.on("connect", () => {
-  console.log("✅ Conectado al broker MQTT");
-  client.subscribe("sensor/alumnos/+/datos");
+client.on('connect', () => {
+  console.log('📡 MQTT conectado');
+  client.subscribe('sensor/alumnos/+/datos');
 });
 
-function calcularEstadoEmocional(data) {
-  const { bpm, rmssd, movimiento } = data;
-  if (bpm === 0) return "Sin Dedo";
-  if (rmssd > 35 && bpm >= 60 && bpm <= 90 && movimiento < 25) return "Calma 😌";
-  if (rmssd < 25 && bpm > 95 && movimiento < 40) return "Estrés 😰";
-  if (bpm < 60 && movimiento < 20 && rmssd > 30) return "Fatiga 😴";
-  if (bpm > 100 && movimiento > 30 && rmssd > 25) return "Excitación 😃";
-  if (rmssd < 20 || (movimiento > 50 && bpm > 90)) return "Ansiedad 😟";
-  return "Neutro 😐";
-}
-
-client.on("message", (topic, message) => {
+client.on('message', (topic, message) => {
   try {
-    let raw = message.toString().trim().replace(/[^\x20-\x7E]+/g, "");
-    const jsonStart = raw.indexOf("{");
-    const jsonEnd = raw.lastIndexOf("}");
+    const raw = message.toString().trim();
+    const jsonStart = raw.indexOf('{');
+    const jsonEnd = raw.lastIndexOf('}');
     if (jsonStart === -1 || jsonEnd === -1) return;
 
     const payload = JSON.parse(raw.slice(jsonStart, jsonEnd + 1));
+    const alumnoId = topic.split('/')[2];
+
+    // 🔹 Enviar todos los datos
     const data = {
-      alumnoId: topic.split('/')[2],
-      bpm: parseFloat(payload.bpm || 0),
-      ir: parseInt(payload.ir || 0),
-      movimiento: parseFloat(payload.movimiento || 0),
-      temperatura: parseFloat(payload.temperatura || 0),
-      rmssd: parseFloat(payload.rmssd || 0),
-      estadoAlumno: parseFloat(payload.estado || 0),
+      alumnoId,
+      bpm: Number(payload.bpm || 0),
+      ir: Number(payload.ir || 0),
+      temperatura: Number(payload.temperatura || 0),
+      movimiento: Number(payload.movimiento || 0),
+      estadoAlumno: Number(payload.estado || 0),
+      rmssd: Number(payload.rmssd || 0),
+      accX: Number(payload.accX || 0),
+      accY: Number(payload.accY || 0),
+      accZ: Number(payload.accZ || 0),
+      gyroX: Number(payload.gyroX || 0),
+      gyroY: Number(payload.gyroY || 0),
+      gyroZ: Number(payload.gyroZ || 0)
     };
-    data.estadoEmocional = calcularEstadoEmocional(data);
-    io.emit("sensorData", data);
+
+    io.emit('sensorData', data);
+
   } catch (err) {
-    console.error("❌ Error procesando MQTT:", err);
+    console.error("❌ Error MQTT:", err);
   }
 });
 
-// --- SOCKET.IO ---
-io.on('connection', socket => {
-  console.log('🟢 Nuevo socket conectado', socket.id);
+// ======================
+// SOCKET.IO
+// ======================
+io.on('connection', (socket) => {
+  console.log("🟢 Conectado", socket.id);
 
   socket.on('join', ({ role, alumnoId, profeId, selfId }) => {
-    if (socket.data?.role === 'alumno') socket.leave(roomOf(socket.data.alumnoId, socket.data.profeId));
-    if (socket.data?.role === 'profesor') {
-      socket.leave(`room:profesor:${socket.data.profeId}`);
-      if (socket.data?.alumnoId) socket.leave(roomOf(socket.data.alumnoId, socket.data.profeId));
-    }
-
-    if (role === 'alumno') {
-      const asignado = alumnoToProfe[alumnoId];
-      if (!asignado) return;
-      profeId = asignado;
-      socket.join(roomOf(alumnoId, profeId));
-    } else if (role === 'profesor') {
+    if (role === 'alumno') socket.join(roomOf(alumnoId, profeId));
+    if (role === 'profesor') {
       socket.join(`room:profesor:${profeId}`);
       if (alumnoId) socket.join(roomOf(alumnoId, profeId));
     }
-
     socket.data = { role, alumnoId, profeId, selfId };
   });
 
-  socket.on('message', async ({ text, alumnoId: alumnoIdParam, tempId }) => {
+  socket.on('message', async ({ text, alumnoId, tempId, from }) => {
     try {
-      const role = socket.data?.role;
-      let alumnoId = socket.data?.alumnoId;
-      let profeId = socket.data?.profeId;
+      const realAlumno = alumnoId || socket.data.alumnoId;
+      const realProfe = socket.data.profeId;
 
-      if (role === 'profesor') alumnoId = alumnoIdParam || alumnoId;
-      if (role === 'alumno') profeId = alumnoToProfe[alumnoId];
-      if (!alumnoId || !profeId) return;
+      const payload = {
+        user_id: from,
+        from,
+        content: text,
+        text,
+        ts: Date.now(),
+        alumnoId: realAlumno,
+        profeId: realProfe,
+        tempId
+      };
 
-      const payload = { from: socket.data.selfId, text, ts: Date.now(), alumnoId, profeId, tempId };
-
-      await Message.create({
-        user_id: socket.data.selfId,
-        alumno_id: alumnoId,
-        profe_id: profeId,
-        content: text
+      await Messages.add({
+        user_id: from,
+        alumno_id: realAlumno,
+        profe_id: realProfe,
+        content: text,
+        ts: payload.ts,
+        created_at: admin.firestore.FieldValue.serverTimestamp()
       });
 
-      io.to(roomOf(alumnoId, profeId)).emit('message', payload);
+      io.to(roomOf(realAlumno, realProfe)).emit('message', payload);
 
     } catch (err) {
-      console.error("❌ Error enviando mensaje:", err);
+      console.error("❌ Error mensaje:", err);
     }
   });
-
-  socket.on('disconnect', () => console.log('🔴 Socket desconectado', socket.id));
 });
 
-server.listen(PORT, () => console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`🚀 Servidor iniciado en http://localhost:${PORT}`));
