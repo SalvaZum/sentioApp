@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Sentio Desk Chat</title>
-  <link rel="stylesheet" href="/style.css"/>
+  <link rel="stylesheet" href="/style.css"/> 
   <script src="/socket.io/socket.io.js"></script>
   <script src="https://kit.fontawesome.com/a2d9e9d6b8.js" crossorigin="anonymous"></script>
   <style>
@@ -46,7 +46,7 @@
   <div class="layout">
     <aside class="side" id="side">
       <div class="upper-side">
-        <h3>Chats</h3>
+        <h3 style="color: white; padding-left: 10px; padding-top: 10px;">Chats</h3>
         <button onclick="logout()" class="salir">Salir</button>
       </div>
       <div id="convList">
@@ -66,10 +66,10 @@
       <section id="sensor-data">
         <div class="container">
           <div class="dashboard">
-            <div class="card">
+            <!-- <div class="card">
               <h3><i class="fas fa-info-circle"></i> Estado Emocional</h3>
               <div class="value" id="moodValue">--</div>
-            </div>
+            </div> -->
 
             <div class="card">
               <h3><i class="fas fa-heart"></i> Ritmo Cardíaco</h3>
@@ -96,7 +96,7 @@
       </section>
     </main>
   </div>
-
+  
   <script src="/app.js"></script>
 </body>
 </html>
